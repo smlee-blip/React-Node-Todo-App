@@ -1,10 +1,14 @@
 # Simple To-Do Application
+
 **Author:** Seung Min Lee
 
 - A simple full-stack To-Do application built with React, Node.js, Express, and SQLite.
 - Users can create, edit, complete, and delete tasks, set due dates, identify overdue items, and monitor their overall completion progress.
-- Task data is stored persistently in SQLite.
+- Task data is stored persistently using local SQLite during development and Turso Serverless SQLite in the deployed application.
+
 - [GitHub Repository](https://github.com/smlee-blip/React-Node-Todo-App)
+- [Live Vercel Deployment](https://react-node-todo-app.vercel.app)
+- [Backend API](https://react-node-todo-api.vercel.app/api/todos)
 
 ## Features
 - Add and view to-do items
@@ -32,7 +36,13 @@
 
 ### Database
 - SQLite
-- Node.js `node:sqlite` module
+- Node.js `node:sqlite` module for local development
+- Turso Serverless SQLite for the deployed application
+- `@libsql/client`
+
+### Deployment
+- Vercel
+- Separate Vercel projects for the React front-end and Express back-end
 
 ## Project Structure
 
@@ -65,7 +75,7 @@ React-Node-Todo-App
 │---- README.md
 ```
 
-The `server/data` directory and SQLite database file are generated automatically when the back-end server starts.
+During local development, the `server/data` directory and SQLite database file are generated automatically when the back-end server starts.
 
 ## Requirements
 - Node.js 22.13.0 or later
@@ -132,19 +142,31 @@ Open `http://localhost:5000` in a browser.
 7. View the progress bar to track completed tasks.
 
 ## Database
-- The application uses SQLite for persistent data storage.
-- The `server/data` directory is created automatically when the back-end server starts.
-- The database file is created at `server/data/todos.db`.
+- The application uses different SQLite environments for local development and deployment.
 - The database contains a `todos` table with the following fields:
   - `id`
   - `text`
   - `completed`
   - `due_date`
   - `created_at`
-- The generated database file is excluded from Git.
+- Local development and the deployed application use separate databases, so their to-do data is not shared.
+
+### Local Development
+
+- Local development uses the Node.js `node:sqlite` module.
+- The `server/data` directory is created automatically when the back-end server starts.
+- The local database file is created at `server/data/todos.db`.
+- The generated database directory is excluded from Git.
+
+### Deployed Application
+
+- The deployed application uses Turso Serverless SQLite.
+- Turso provides persistent database storage because Vercel does not provide persistent local file storage for serverless deployments.
+- Turso connection information is stored securely in Vercel environment variables.
 
 ## API Endpoints
-The base API URL is `http://localhost:5000/api/todos`.
+- Local API: `http://localhost:5000/api/todos`
+- Deployed API: `https://react-node-todo-api.vercel.app/api/todos`
 
 | Method | Endpoint | Description |
 |---|---|---|
