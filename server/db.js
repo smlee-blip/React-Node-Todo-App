@@ -51,18 +51,21 @@ async function getTursoClient() {
     // Dynamically import the web client.
     tursoClientPromise = import("@libsql/client/web").then(
       ({ createClient }) => {
-        if (!process.env.TURSO_AUTH_TOKEN) {
+         // Support both the standard Turso token name and prefixed name created by Vercel.
+         const authToken =
+           process.env.TURSO_AUTH_TOKEN ||
+           process.env.TURSO_DATABASE_TURSO_AUTH_TOKEN;
+        if (!authToken) {
           throw new Error(
-            "TURSO_AUTH_TOKEN is not configured."
+            "The Turso authentication token is not configured."
           );
         }
         // Create and return the Turso database client.
         return createClient({
           url: process.env.TURSO_DATABASE_URL,
-          authToken: process.env.TURSO_AUTH_TOKEN,
+          authToken,
         });
-      }
-    );
+     });    
   }
 
   return tursoClientPromise;
