@@ -3,11 +3,13 @@ import AddTodo from "./components/AddTodo";
 import TodoList from "./components/TodoList";
 import "./App.css";
 
-// During development, Vite and Express run on different ports.
-// In production, Express serves the React build, so a relative API path is used.
-const API_URL = import.meta.env.DEV
-  ? "http://localhost:5000/api/todos"
-  : "/api/todos";
+// Use the deployed API URL when it is provided.
+// Otherwise, use the local development or production URL.
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV
+    ? "http://localhost:5000/api/todos"
+    : "/api/todos"); 
 
 function App() {
   // Store all to-do items received from the server.

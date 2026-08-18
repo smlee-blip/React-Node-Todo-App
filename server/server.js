@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 const cors = require("cors");
 const db = require("./db");
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -9,10 +10,10 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Convert SQLite data into a format that is easier to use in React.
+// Convert database data into a format for React.
 function formatTodo(row) {
   return {
-    id: row.id,
+    id: Number(row.id),
     text: row.text,
     completed: Boolean(row.completed),
     dueDate: row.due_date,
@@ -20,7 +21,8 @@ function formatTodo(row) {
   };
 }
 
-// Check whether a due date is a real date with a four-digit year.
+// Check whether a due date is a real date
+// with a four-digit year.
 function isValidDueDate(dueDate) {
   // The due date is optional.
   if (
@@ -51,11 +53,11 @@ function isValidDueDate(dueDate) {
   ) {
     return false;
   }
-
+  // Determine whether February has 28 or 29 days.
   const isLeapYear =
     year % 400 === 0 ||
     (year % 4 === 0 && year % 100 !== 0);
-
+  // Store the maximum number of days in each month.
   const daysInMonth = [
     31,
     isLeapYear ? 29 : 28,
@@ -75,10 +77,12 @@ function isValidDueDate(dueDate) {
 }
 
 // GET /api/todos: Get all to-do items.
-app.get("/api/todos", (req, res) => {
+app.get("/api/todos", async (req, res) => {
   try {
-    const statement = db.prepare(`SELECT * FROM todos ORDER BY id DESC`);
-    const rows = statement.all();
+    const rows = await db.all(
+      `SELECT * FROM todos ORDER BY id DESC`
+    );
+
     const todos = rows.map(formatTodo);
 
     res.json(todos);
@@ -92,36 +96,46 @@ app.get("/api/todos", (req, res) => {
 });
 
 // POST /api/todos: Add a new to-do item.
-app.post("/api/todos", (req, res) => {
+app.post("/api/todos", async (req, res) => {
   try {
     const body = req.body ?? {};
-
-    if (typeof body.text !== "string" || !body.text.trim()) {
+    // The task text must be a non-empty string.
+    if (
+      typeof body.text !== "string" ||
+      !body.text.trim()
+    ) {
       return res.status(400).json({
         message: "To-do text is required.",
       });
     }
-
+    // Reject an invalid due date.
     if (!isValidDueDate(body.dueDate)) {
       return res.status(400).json({
-        message: "Due date must be a valid date in YYYY-MM-DD format.",
+        message:
+          "Due date must be a valid date in YYYY-MM-DD format.",
       });
     }
 
     const text = body.text.trim();
+    // Store null when no due date was selected.
     const dueDate = body.dueDate || null;
-
-    const statement = db.prepare(`
-      INSERT INTO todos (text, completed, due_date)
-      VALUES (?, 0, ?)
-    `);
-
-    const result = statement.run(text, dueDate);
-
-    // Retrieve the newly created to-do item.
-    const newTodo = db
-      .prepare(`SELECT * FROM todos WHERE id = ?`)
-      .get(result.lastInsertRowid);
+    // Insert the new item into the selected database.
+    const result = await db.run(
+      `
+        INSERT INTO todos (
+          text,
+          completed,
+          due_date
+        )
+        VALUES (?, 0, ?)
+      `,
+      [text, dueDate]
+    );
+    // Retrieve the newly created item using its ID.
+    const newTodo = await db.get(
+      `SELECT * FROM todos WHERE id = ?`,
+      [result.lastInsertRowid]
+    );
 
     res.status(201).json(formatTodo(newTodo));
   } catch (error) {
@@ -133,32 +147,35 @@ app.post("/api/todos", (req, res) => {
   }
 });
 
-// PUT /api/todos/:id: Update an existing to-do item.
-app.put("/api/todos/:id", (req, res) => {
+// PUT /api/todos/:id: Update a to-do item.
+app.put("/api/todos/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     const body = req.body ?? {};
-
+    // The ID must be a positive whole number.
     if (!Number.isInteger(id) || id <= 0) {
       return res.status(400).json({
         message: "Invalid to-do ID.",
       });
     }
-
-    // Check whether the to-do item exists.
-    const existingTodo = db
-      .prepare(`SELECT * FROM todos WHERE id = ?`)
-      .get(id);
+    // Find the current item before updating it.
+    const existingTodo = await db.get(
+      `SELECT * FROM todos WHERE id = ?`,
+      [id]
+    );
 
     if (!existingTodo) {
       return res.status(404).json({
         message: "To-do item not found.",
       });
     }
-
+    // If text was provided, it must be a non-empty string.
     if (
       body.text !== undefined &&
-      (typeof body.text !== "string" || !body.text.trim())
+      (
+        typeof body.text !== "string" ||
+        !body.text.trim()
+      )
     ) {
       return res.status(400).json({
         message: "To-do text is required.",
@@ -176,37 +193,41 @@ app.put("/api/todos/:id", (req, res) => {
 
     if (!isValidDueDate(body.dueDate)) {
       return res.status(400).json({
-        message: "Due date must be a valid date in YYYY-MM-DD format.",
+        message:
+          "Due date must be a valid date in YYYY-MM-DD format.",
       });
     }
-
+    // Use the new text when it is provided. Otherwise, keep the existing text.
     const text =
-      body.text !== undefined ? body.text.trim() : existingTodo.text;
+      body.text !== undefined
+        ? body.text.trim()
+        : existingTodo.text;
 
     const completed =
-      body.completed !== undefined 
-        ? body.completed 
-          ? 1 
-          : 0 
+      body.completed !== undefined
+        ? body.completed
+          ? 1
+          : 0
         : existingTodo.completed;
 
     const dueDate =
-      body.dueDate !== undefined 
-        ? body.dueDate || null 
+      body.dueDate !== undefined
+        ? body.dueDate || null
         : existingTodo.due_date;
-
-    const statement = db.prepare(`
-      UPDATE todos
-      SET text = ?, completed = ?, due_date = ?
-      WHERE id = ?
-    `);
-
-    statement.run(text, completed, dueDate, id);
-
-    // Retrieve the updated to-do item.
-    const updatedTodo = db
-      .prepare(`SELECT * FROM todos WHERE id = ?`)
-      .get(id);
+    // Update the matching database row.
+    await db.run(
+      `
+        UPDATE todos
+        SET text = ?, completed = ?, due_date = ?
+        WHERE id = ?
+      `,
+      [text, completed, dueDate, id]
+    );
+    // Retrieve the updated item from the database.
+    const updatedTodo = await db.get(
+      `SELECT * FROM todos WHERE id = ?`,
+      [id]
+    );
 
     res.json(formatTodo(updatedTodo));
   } catch (error) {
@@ -219,7 +240,7 @@ app.put("/api/todos/:id", (req, res) => {
 });
 
 // DELETE /api/todos/:id: Delete a to-do item.
-app.delete("/api/todos/:id", (req, res) => {
+app.delete("/api/todos/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
 
@@ -228,11 +249,13 @@ app.delete("/api/todos/:id", (req, res) => {
         message: "Invalid to-do ID.",
       });
     }
+    // Delete the matching item.
+    const result = await db.run(
+      `DELETE FROM todos WHERE id = ?`,
+      [id]
+    );
 
-    const statement = db.prepare(`DELETE FROM todos WHERE id = ?`);
-    const result = statement.run(id);
-
-    if (Number(result.changes) === 0) {
+    if (result.changes === 0) {
       return res.status(404).json({
         message: "To-do item not found.",
       });
@@ -248,17 +271,25 @@ app.delete("/api/todos/:id", (req, res) => {
   }
 });
 
-// Serve the built React application.
-const clientDistPath = path.join(
-  __dirname,
-  "..",
-  "client",
-  "dist"
-);
-
-app.use(express.static(clientDistPath));
+// Serve the React build only during local production use.
+// The front end is deployed as a separate Vercel project.
+if (!process.env.VERCEL) {
+  const clientDistPath = path.join(
+    __dirname,
+    "..",
+    "client",
+    "dist"
+  );
+  // Make the built React files publicly available.
+  app.use(express.static(clientDistPath));
+}
 
 // Start the Express server.
+// Vercel also supports the app.listen pattern.
 app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
+  console.log(
+    `Server is running at http://localhost:${PORT}`
+  );
 });
+
+module.exports = app;
